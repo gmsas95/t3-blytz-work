@@ -1,0 +1,61 @@
+services:
+  postgres:
+    container_name: t3-blytzwork-postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-blytz_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-blytz_work}
+    volumes:
+      - t3-blytzwork-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-blytz_user} -d ${POSTGRES_DB:-blytz_work}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - t3-blytzwork
+
+  app:
+    container_name: t3-blytzwork-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-blytz_user}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-blytz_work}
+      AUTH_SECRET: ${AUTH_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      # Skip env validation for Docker build
+      SKIP_ENV_VALIDATION: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:3000/
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - t3-blytzwork
+
+volumes:
+  t3-blytzwork-postgres-data:
+    driver: local
+
+networks:
+  t3-blytzwork:
+    name: t3-blytzwork
+    driver: bridge
